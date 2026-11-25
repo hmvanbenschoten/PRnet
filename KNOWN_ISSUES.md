@@ -1,9 +1,12 @@
 # Known issues
 
-Issues found while porting this fork to Python 3.11 / PyTorch 2.x that were
-**deliberately left unfixed**, because fixing them would change model behaviour,
-training dynamics, or published numbers. They are recorded here so the next
-person does not have to rediscover them.
+Findings from porting this fork to Python 3.11 / PyTorch 2.x, recorded so the
+next person does not have to rediscover them.
+
+Sections 1 and 2 are real defects **deliberately left unfixed**, because fixing
+them would change model behaviour, training dynamics, or published numbers.
+Section 3 is the opposite: something that looks like a defect, is frequently
+"fixed" by mistake, and must be left alone.
 
 The compatibility port itself touched only device handling, removed API kwargs,
 removed sparse-matrix aliases and dead imports; it did not alter the model,
@@ -86,10 +89,9 @@ numbers from any re-run.
 
 ---
 
-## 3. Normalisation is applied unconditionally in the entry scripts
+## 3. Normalisation is applied twice, by design — do not remove it
 
-`train_lincs.py`, `train_sciplex.py`, `test_lincs.py`, `test_sciplex.py`,
-`test_demo.py` all do:
+All five entry scripts do:
 
 ```python
 adata = sc.read(...)
@@ -97,30 +99,54 @@ sc.pp.normalize_total(adata)
 sc.pp.log1p(adata)
 ```
 
-This was added upstream in commit `f19174b` (2024-12-13, "add normalization and
-log-tranformation"). There is no guard against input that is **already**
-normalised — and the datasets distributed with the paper, plus the output of
-`preprocessing/custom_data_preprocessing.ipynb`, are already log-scale. CCLE
-expression in that notebook is log2(TPM+1); running `normalize_total` + `log1p`
-over it log-transforms twice.
+**This is correct and must stay.** An earlier revision of this file claimed the
+shipped checkpoints predated normalisation and might therefore mismatch the
+current scripts. That was wrong, in both directions. The history says:
 
-Consequences:
+| Date | Commit | Event |
+| --- | --- | --- |
+| 2024-03-21 | `660b141` | `normalize_total` + `log1p` added to **`train_*.py`** |
+| 2024-07-24 | `9c1e922` | **`checkpoint/*.pt` committed** |
+| 2024-12-13 | `f19174b` | same two lines added to **`test_*.py`** |
 
-- Any dataset preprocessed before that commit is now being double-transformed.
-- `sc.pp.log1p` sets `adata.uns['log1p']`, so a second call in the same session
-  warns but still applies.
-- Because the shipped checkpoints were trained under one convention and the
-  current scripts apply another, it is not currently clear from the repo alone
-  which convention `checkpoint/*.pt` expects. **Verify against a known-good
-  reference before trusting fine-tuned results.**
+`git show 9c1e922:train_lincs.py` already carries both calls at lines 64-65, so
+`lincs_best_epoch_all.pt` and `sciplex_best_epoch_all.pt` were trained **with**
+normalisation applied. `f19174b` ("add normalization and log-tranformation")
+reads like a new feature but is really a **bug fix**: between 2024-03 and
+2024-12 the train and test paths disagreed, and inference was feeding
+un-normalised data to a model trained on normalised data.
 
-Note also that `normalize_total` is called with no `target_sum`, so it
-normalises to the median library size of whatever subset is loaded — making the
-scaling dataset-dependent rather than fixed.
+### What is genuinely odd (but not a bug)
 
-**Fix would change:** the input distribution the model sees, i.e. everything.
-Resolving this needs a decision about what the checkpoints were trained on, not
-just a code edit.
+The input data is *already* on the LINCS log2 scale — `dataset/demo.h5ad` ships
+with `X` spanning 2.4 to 15.0, and `preprocessing/custom_data_preprocessing.ipynb`
+builds its matrix from CCLE log2(TPM+1). So the pipeline log-transforms
+already-log-scale data. That is unusual, but it is applied **identically at
+train and test time**, which is the only thing that matters for a checkpoint.
+Removing it would require retraining from scratch.
+
+Measured on the demo set (661 x 978, `lincs_best_epoch_all.pt`, CPU), via the
+`--skip_normalization` flag on `test_demo.py`:
+
+| Metric | normalised (default) | `--skip_normalization` |
+| --- | --- | --- |
+| per-gene-mean R^2, prediction vs truth | **0.8772** | **-8.2693** |
+| effect Pearson r, top 50 genes | 0.3465 | 0.1034 |
+| prediction range | -1.09 .. 3.88 | -0.00 .. 22.69 |
+
+Without normalisation the decoder emits values up to 22.69 against a truth
+ceiling of 15.0 — it is being driven on a scale it never saw in training.
+
+### Remaining real caveat
+
+`normalize_total` is called with no `target_sum`, so it normalises to the median
+library size of **whatever subset is loaded**. The scaling is therefore
+dataset-dependent rather than fixed, and a fine-tuning set with a different
+median library size will be scaled differently from the data the checkpoints
+were trained on. Passing an explicit `target_sum` would make this reproducible,
+but it changes the input distribution, so it needs a reference run to validate.
+
+**Do not "fix" this section by deleting the two `sc.pp` lines.**
 
 ---
 

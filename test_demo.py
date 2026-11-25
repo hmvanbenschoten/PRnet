@@ -22,6 +22,7 @@ def parse_args():
     parse.add_argument('--data_path', default='./datasets/demo.h5ad', type=str, help='path of data')
     parse.add_argument('--save_dir', default='./checkpoint/', type=str, help='path of model weight') 
     parse.add_argument('--results_dir', default='./results/demo/', type=str, help='path of results')  
+    parse.add_argument('--skip_normalization', action='store_true', help='skip sc.pp.normalize_total/log1p; default is to apply them, matching upstream behaviour')
     args = parse.parse_args()  
     return args
 
@@ -34,8 +35,11 @@ if __name__ == "__main__":
     print(os.getcwd())
 
     adata = sc.read(args_train.data_path)
-    sc.pp.normalize_total(adata)
-    sc.pp.log1p(adata)
+    if args_train.skip_normalization:
+        print('--skip_normalization: NOT applying sc.pp.normalize_total / sc.pp.log1p')
+    else:
+        sc.pp.normalize_total(adata)
+        sc.pp.log1p(adata)
 
     
 
