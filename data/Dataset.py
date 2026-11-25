@@ -33,7 +33,7 @@ class DrugDoseAnnDataset(Dataset):
         print(self.dense_adata)
 
         if sparse.issparse(adata.X):
-            self.dense_adata  = sc.AnnData(X=adata.X.A, obs=adata.obs.copy(deep=True), var=adata.var.copy(deep=True), uns=adata.uns.copy(deep=True))
+            self.dense_adata  = sc.AnnData(X=adata.X.toarray(), obs=adata.obs.copy(deep=True), var=adata.var.copy(deep=True), uns=adata.uns.copy(deep=True))
         
                     
         self.drug_adata = self.dense_adata[self.dense_adata.obs['dose']!=0.0] 

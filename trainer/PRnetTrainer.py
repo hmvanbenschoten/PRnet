@@ -161,7 +161,7 @@ class PRnetTrainer:
         self.optimPGM = torch.optim.Adam(
             paramsPGM, lr=lr, weight_decay= weight_decay) # consider changing the param. like weight_decay, eps, etc.
         #self.scheduler_autoencoder = torch.optim.lr_scheduler.StepLR(self.optimPGM, step_size=10)
-        self.scheduler_autoencoder = torch.optim.lr_scheduler.ReduceLROnPlateau(self.optimPGM, 'min',factor=scheduler_factor,verbose=1,min_lr=1e-8,patience=scheduler_patience)
+        self.scheduler_autoencoder = torch.optim.lr_scheduler.ReduceLROnPlateau(self.optimPGM, 'min',factor=scheduler_factor,min_lr=1e-8,patience=scheduler_patience)
 
 
         for self.epoch in range(self.n_epochs):
@@ -355,7 +355,8 @@ class PRnetTrainer:
                 self.patient = 0
                 print("Saving best state of network...")
                 print("Best State was in Epoch", self.epoch)
-                self.best_state_dictG = self.modelPGM.module.state_dict()
+                model_to_save = self.modelPGM.module if isinstance(self.modelPGM, nn.DataParallel) else self.modelPGM
+                self.best_state_dictG = model_to_save.state_dict()
                 torch.save(self.best_state_dictG, self.model_save_dir+self.split_key+'_best_epoch_all.pt')
                 self.best_mse = self.mse_score[-1]
             elif self.patient <= 20:
@@ -375,7 +376,7 @@ class PRnetTrainer:
 
     def test(self, model_path, return_dict = False):
 
-        self.modelPGM.load_state_dict(torch.load(model_path))
+        self.modelPGM.load_state_dict(torch.load(model_path, map_location=self.device))
         self.modelPGM.eval()
 
         x_true_array = np.zeros((0, self.x_dim))
@@ -478,7 +479,7 @@ class PRnetTrainer:
  
     @staticmethod
     def _anndataToTensor(adata: AnnData) -> torch.Tensor:
-        data_ndarray = adata.X.A
+        data_ndarray = adata.X.toarray()
         data_tensor = torch.from_numpy(data_ndarray)
         return data_tensor
     
@@ -506,7 +507,7 @@ class PRnetTrainer:
 
     def get_per_latent(self, model_path):
     
-        self.modelPGM.load_state_dict(torch.load(model_path))
+        self.modelPGM.load_state_dict(torch.load(model_path, map_location=self.device))
         self.modelPGM.eval()
 
         cov_drug_list = []
@@ -540,7 +541,7 @@ class PRnetTrainer:
 
     def get_latent(self, model_path):
         
-        self.modelPGM.load_state_dict(torch.load(model_path))
+        self.modelPGM.load_state_dict(torch.load(model_path, map_location=self.device))
         self.modelPGM.eval()
 
         cov_drug_list = []

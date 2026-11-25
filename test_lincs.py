@@ -4,7 +4,7 @@
 # @Last Modified by:   Xiaoning Qi
 # @Last Modified time: 2024-10-31 15:27:11
 import os
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+os.environ.setdefault('CUDA_VISIBLE_DEVICES', '0')
 
 
 import sys

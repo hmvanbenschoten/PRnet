@@ -1,10 +1,47 @@
-numpy
-pandas
-tqdm
-scikit-learn
-torch
-scanpy
-rdkit
-anndata
-matplotlib
-seaborn
+# PRnet dependencies, pinned for Python 3.11.
+#
+# The upstream project targeted Python 3.7 / PyTorch 1.12.1 with an unpinned
+# requirements.txt. These pins are a coherent set for Python 3.11; see the
+# notes below for why each upper bound matters.
+#
+#   python -m venv .venv && . .venv/bin/activate
+#   pip install -r requirements.txt
+#
+# For a CUDA build of torch, install it first from the PyTorch index, e.g.
+#   pip install torch==2.4.1 --index-url https://download.pytorch.org/whl/cu121
+
+# --- core numerics -----------------------------------------------------------
+# numpy is held at the last 1.x release: several of the pinned scientific
+# packages below still ship numpy-1.x ABI wheels.
+numpy==1.26.4
+pandas==2.2.3
+scipy==1.13.1
+
+# --- torch -------------------------------------------------------------------
+# >=2.2 would reject the ReduceLROnPlateau verbose= kwarg (now removed from the
+# code). <2.6 keeps torch.load's weights_only default at False, matching how the
+# shipped checkpoints are loaded.
+torch==2.4.1
+
+# --- single-cell stack -------------------------------------------------------
+# anndata <0.11 keeps adata.X as a scipy sparse *matrix* and supports the
+# uns.copy(deep=True) call in data/Dataset.py.
+anndata==0.10.9
+scanpy==1.10.3
+h5py==3.11.0
+
+# --- cheminformatics ---------------------------------------------------------
+# AllChem.GetMorganFingerprintAsBitVect is deprecated in favour of
+# MorganGenerator from 2024.09 onward; this pin predates that warning.
+rdkit==2023.9.6
+
+# --- ml / metrics ------------------------------------------------------------
+# OneHotEncoder(sparse=False) in data/_utils.py:Condition_encoder was removed in
+# scikit-learn 1.4 (renamed sparse_output). That function is currently unused,
+# so this pin is what keeps it from becoming a runtime error.
+scikit-learn==1.3.2
+
+# --- plotting / misc ---------------------------------------------------------
+matplotlib==3.8.4
+seaborn==0.13.2
+tqdm==4.66.5

@@ -4,7 +4,6 @@
 # @Last Modified by:   Xiaoning Qi
 # @Last Modified time: 2024-03-21 21:28:04
 
-from cgi import test
 from random import shuffle
 import sys
 import anndata
@@ -21,7 +20,7 @@ def shuffle_adata(adata):
     """
     if sparse.issparse(adata.X):
         #adata.X: sparse matrix to array
-        adata.X = adata.X.A
+        adata.X = adata.X.toarray()
 
     ind_list = [i for i in range(adata.shape[0])]
     shuffle(ind_list)
